@@ -1,0 +1,33 @@
+# action.yml
+name: 'wt.dev-load-secrets'
+description: 'Fetches JSON from an HTTP endpoint and sets the keys as environment variables'
+inputs:
+  username: 
+    description: 'Username for wt.dev'
+    required: true
+  password:
+    description: 'Password for wt.dev'
+    required: true
+
+  project:
+    description: 'Project identifier'
+    required: true
+  environment:
+    description: 'Environment name'
+    required: true
+  env_prefix:
+    description: 'Prefix for environment variables to prevent clashes'
+    required: false
+    default: ''
+  outputs_prefix:
+    description: 'Prefix to add to output keys to prevent clashes'
+    required: false
+    default: ''
+  upper_case_env_keys:
+    description: 'uppercase environment variable keys (including prefix)'
+    required: false
+    default: false
+    
+runs:
+  using: 'node16'
+  main: 'dist/index.js'

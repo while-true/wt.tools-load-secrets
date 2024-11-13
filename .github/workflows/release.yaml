@@ -1,0 +1,136 @@
+name: Release and Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        type: string
+      type:
+        description: 'Release type'
+        required: true
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+      prerelease:
+        description: 'Is this a pre-release?'
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build
+        run: npm run build
+      
+      - name: Run tests
+        run: npm test
+      
+      - name: Run lint
+        run: npm run lint
+
+  release:
+    name: Create Release
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build
+        run: npm run build
+      
+      - name: Update version in package.json
+        run: |
+          npm version ${{ github.event.inputs.version }} --no-git-tag-version
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          git add package.json package-lock.json
+          git commit -m "bump version to ${{ github.event.inputs.version }}"
+      
+      - name: Push changes
+        run: git push
+      
+      - name: Create Release Tags
+        run: |
+          VERSION=${{ github.event.inputs.version }}
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git tag -f "v${VERSION%%.*}" -m "Update major version tag"
+          git push --tags --force
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # If no previous tag exists, use first commit
+            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          
+          echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+          echo "## What's Changed" >> $GITHUB_ENV
+          git log --pretty=format:"* %s (%h)" ${PREVIOUS_TAG}..HEAD >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          name: Release v${{ github.event.inputs.version }}
+          body: ${{ env.CHANGELOG }}
+          prerelease: ${{ github.event.inputs.prerelease }}
+          files: |
+            dist/index.js
+            action.yml
+            LICENSE
+            README.md
+
+  publish-marketplace:
+    name: Publish to GitHub Marketplace
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ github.event.inputs.version }}
+      
+      - name: Update major version tag
+        run: |
+          git tag -f "v${VERSION%%.*}" "v${VERSION}"
+          git push origin "v${VERSION%%.*}" --force
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+

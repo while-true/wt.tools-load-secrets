@@ -1,0 +1,77 @@
+# .github/workflows/test.yml
+name: 'Test Action'
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+    inputs:
+      test_url:
+        description: 'Test API URL'
+        required: false
+        default: 'https://httpbin.org/json'
+      test_project:
+        description: 'Test Project'
+        required: false
+        default: 'test-project'
+      test_env:
+        description: 'Test Environment'
+        required: false
+        default: 'test'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build
+        run: npm run build
+      
+      - name: Run Lint
+        run: npm run lint
+        
+      - name: Test Action (Integration)
+        uses: ./
+        with:
+          api_url: ${{ github.event.inputs.test_url || 'https://httpbin.org/json' }}
+          project: ${{ github.event.inputs.test_project || 'test-project' }}
+          environment: ${{ github.event.inputs.test_env || 'test' }}
+
+  test-matrix:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [16, 18, 20]
+      fail-fast: false
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build
+        run: npm run build
