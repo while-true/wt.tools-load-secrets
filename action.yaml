@@ -1,20 +1,21 @@
-# action.yml
 name: 'wt.tools-load-secrets'
 description: 'Fetches JSON from an HTTP endpoint and sets the keys as environment variables'
 inputs:
+  presigned_url:
+    description: 'Presigned URL that includes authentication and path to secrets'
+    required: false
   apikey: 
-    description: 'wt.tools API key'
-    required: true
+    description: 'wt.tools API key (not required if using presigned_url)'
+    required: false
   apisecret:
-    description: 'wt.tools API secret'
-    required: true
-
+    description: 'wt.tools API secret (not required if using presigned_url)'
+    required: false
   project:
-    description: 'Project identifier'
-    required: true
+    description: 'Project identifier (not required if using presigned_url)'
+    required: false
   environment:
-    description: 'Environment name'
-    required: true
+    description: 'Environment name (not required if using presigned_url)'
+    required: false
   env_prefix:
     description: 'Prefix for environment variables to prevent clashes'
     required: false
@@ -27,6 +28,10 @@ inputs:
     description: 'uppercase environment variable keys (including prefix)'
     required: false
     default: false
+  api_base_url:
+    description: 'Override the default API base URL (not required if using presigned_url)'
+    required: false
+    default: 'https://api.wt.tools'
     
 runs:
   using: 'node16'

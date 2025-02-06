@@ -38,6 +38,8 @@ describe('wt-tools-load-secrets action', () => {
         return 'false';
       case 'api_base_url':
         return 'https://api.wt.tools';
+      case 'presigned_url':
+        return '';
       default:
         return '';
     }
@@ -49,6 +51,55 @@ describe('wt-tools-load-secrets action', () => {
     
     // Set up default mock implementation
     mockGetInput.mockImplementation(getDefaultInputValue);
+  });
+
+  it('should handle presigned URL', async () => {
+    const presignedUrl = 'https://api.wt.tools/v1/secrets/presigned/abc123';
+    mockGetInput.mockImplementation((name: string) => {
+      if (name === 'presigned_url') return presignedUrl;
+      return getDefaultInputValue(name);
+    });
+
+    const mockSecrets = { SECRET: 'value' };
+    mockGetJson.mockResolvedValueOnce({ result: mockSecrets });
+
+    await run();
+
+    // Verify HTTP client was created without auth
+    expect(HttpClient).toHaveBeenCalledWith('wt-tools-action');
+    
+    // Verify the presigned URL was used
+    expect(mockGetJson).toHaveBeenCalledWith(
+      presignedUrl,
+      expect.any(Object)
+    );
+
+    // Verify secrets were set
+    expect(mockExportVariable).toHaveBeenCalledWith('SECRET', 'value');
+  });
+
+  it('should handle presigned URL with prefixes and uppercase', async () => {
+    const presignedUrl = 'https://api.wt.tools/v1/secrets/presigned/abc123';
+    mockGetInput.mockImplementation((name: string) => {
+      switch (name) {
+        case 'presigned_url':
+          return presignedUrl;
+        case 'env_prefix':
+          return 'PREFIX_';
+        case 'upper_case_env_keys':
+          return 'true';
+        default:
+          return getDefaultInputValue(name);
+      }
+    });
+
+    const mockSecrets = { secret_key: 'value' };
+    mockGetJson.mockResolvedValueOnce({ result: mockSecrets });
+
+    await run();
+
+    // Verify secrets were set with prefix and uppercase
+    expect(mockExportVariable).toHaveBeenCalledWith('PREFIX_SECRET_KEY', 'value');
   });
 
   it('should successfully set environment variables from secrets', async () => {

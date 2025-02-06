@@ -9,28 +9,40 @@ interface SecretResponse {
 
 async function run(): Promise<void> {
   try {
-    // Get inputs from action.yml
-    const apiKey = core.getInput('apikey', { required: true });
-    const apiSecret = core.getInput('apisecret', { required: true });
-    const project = core.getInput('project', { required: true });
-    const environment = core.getInput('environment', { required: true });
+    // Get inputs
+    const presignedUrl = core.getInput('presigned_url');
     const envPrefix = core.getInput('env_prefix') || '';
     const outputsPrefix = core.getInput('outputs_prefix') || '';
     const upperCaseEnvKeys = core.getInput('upper_case_env_keys') === 'true';
-    const apiBaseUrl = core.getInput('api_base_url') || 'https://api.wt.tools';
 
-    // Create HTTP client with Basic Auth
-    const http = new HttpClient('wt-tools-action', [
-      new BasicCredentialHandler(apiKey, apiSecret)
-    ]);
+    let http: HttpClient;
+    let url: string;
+
+    if (presignedUrl) {
+      // For presigned URL, create client without auth
+      http = new HttpClient('wt-tools-action');
+      url = presignedUrl;
+    } else {
+      // Traditional auth method
+      const apiKey = core.getInput('apikey', { required: true });
+      const apiSecret = core.getInput('apisecret', { required: true });
+      const project = core.getInput('project', { required: true });
+      const environment = core.getInput('environment', { required: true });
+      const apiBaseUrl = core.getInput('api_base_url') || 'https://api.wt.tools';
+
+      // Create HTTP client with Basic Auth
+      http = new HttpClient('wt-tools-action', [
+        new BasicCredentialHandler(apiKey, apiSecret)
+      ]);
+
+      // Construct URL for traditional method
+      url = `${apiBaseUrl}/v1/secrets/projects/${project}/environment/${environment}/json`;
+    }
 
     // Get project secrets
-    const response = await http.getJson<SecretResponse>(
-      `${apiBaseUrl}/v1/secrets/projects/${project}/environment/${environment}/json`,
-      {
-        'Accept': 'application/json'
-      }
-    );
+    const response = await http.getJson<SecretResponse>(url, {
+      'Accept': 'application/json'
+    });
 
     if (!response.result) {
       throw new Error('No secrets found or invalid response');
