@@ -1,6 +1,6 @@
 {
-  "name": "wt.dev-secrets",
-  "version": "1.0.0",
+  "name": "wt.tools-secrets",
+  "version": "1.0",
   "description": "Load wt.dev config/secrets into ENV variables or github action outputs",
   "main": "dist/index.js",
   "scripts": {
@@ -9,7 +9,13 @@
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write src/**/*.ts"
   },
-  "keywords": ["github", "action", "json", "env", "wt.dev"],
+  "keywords": [
+    "github",
+    "action",
+    "json",
+    "env",
+    "wt.dev"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -17,6 +23,7 @@
     "@actions/http-client": "^2.1.0"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "@types/node": "^18.15.0",
     "@typescript-eslint/eslint-plugin": "^5.54.1",
     "@typescript-eslint/parser": "^5.54.1",
@@ -30,9 +37,14 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
-    "testMatch": ["**/tests/**/*.test.ts"],
+    "testMatch": [
+      "**/tests/**/*.test.ts"
+    ],
     "collectCoverage": true,
-    "coverageReporters": ["text", "lcov"],
+    "coverageReporters": [
+      "text",
+      "lcov"
+    ],
     "coverageDirectory": "coverage"
   }
 }

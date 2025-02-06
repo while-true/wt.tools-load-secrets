@@ -1,279 +1,177 @@
-// src/__tests__/index.test.ts
 import * as core from '@actions/core';
-import * as http from '@actions/http-client';
-import { getInputs, fetchConfig, setEnvironmentVariables, run } from '../index';
-import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { HttpClient } from '@actions/http-client';
+import run from '../index';
 
-// Mock the GitHub Actions core and http client
+// Mock the core and http-client modules
 jest.mock('@actions/core');
 jest.mock('@actions/http-client');
 
-type MockResponse = {
-  message: {
-    statusCode: number;
+describe('wt-tools-load-secrets action', () => {
+  const mockGetInput = core.getInput as jest.MockedFunction<typeof core.getInput>;
+  const mockExportVariable = core.exportVariable as jest.MockedFunction<typeof core.exportVariable>;
+  const mockSetOutput = core.setOutput as jest.MockedFunction<typeof core.setOutput>;
+  const mockSetFailed = core.setFailed as jest.MockedFunction<typeof core.setFailed>;
+  const mockInfo = core.info as jest.MockedFunction<typeof core.info>;
+
+  // Mock HttpClient constructor and its methods
+  const mockGetJson = jest.fn();
+  (HttpClient as jest.Mock).mockImplementation(() => ({
+    getJson: mockGetJson
+  }));
+
+  // Helper function to get default input values
+  const getDefaultInputValue = (name: string): string => {
+    switch (name) {
+      case 'apikey':
+        return 'test-api-key';
+      case 'apisecret':
+        return 'test-api-secret';
+      case 'project':
+        return 'test-project';
+      case 'environment':
+        return 'test-env';
+      case 'env_prefix':
+        return '';
+      case 'outputs_prefix':
+        return '';
+      case 'upper_case_env_keys':
+        return 'false';
+      case 'api_base_url':
+        return 'https://api.wt.tools';
+      default:
+        return '';
+    }
   };
-  readBody: () => Promise<string>;
-};
 
-describe('JSON to Env Action', () => {
   beforeEach(() => {
-    jest.resetAllMocks();
+    // Clear all mocks before each test
+    jest.clearAllMocks();
+    
+    // Set up default mock implementation
+    mockGetInput.mockImplementation(getDefaultInputValue);
+  });
 
-    // Setup core mocks
-    (core.getInput as jest.Mock).mockImplementation((name: string): string => {
-      const inputs: Record<string, string> = {
-        'api_url': 'https://test-api.com',
-        'project': 'test-project',
-        'environment': 'test',
-        'env_prefix': 'PREFIX_',
-        'outputs_prefix': 'OUT_',
-        'upper_case_env_keys': 'true'
-      };
-      return inputs[name] || '';
-    });
-
-    // Setup other core mocks
-    (core.setFailed as jest.Mock).mockImplementation(() => {});
-    (core.exportVariable as jest.Mock).mockImplementation(() => {});
-    (core.setOutput as jest.Mock).mockImplementation(() => {});
-    (core.debug as jest.Mock).mockImplementation(() => {});
-    (core.info as jest.Mock).mockImplementation(() => {});
-
-    // Setup HTTP client mock
-    const mockResponse: MockResponse = {
-      message: {
-        statusCode: 200
-      },
-      readBody: async () => JSON.stringify({
-        database_url: 'postgresql://test',
-        api_key: 'test-key',
-        nested_config: { key: 'value' }
-      })
+  it('should successfully set environment variables from secrets', async () => {
+    // Mock successful API response
+    const mockSecrets = {
+      DB_PASSWORD: 'secret123',
+      API_TOKEN: 'token456',
+      CONFIG: { key: 'value' }
     };
+    mockGetJson.mockResolvedValueOnce({ result: mockSecrets });
 
-    (http.HttpClient.prototype.get as jest.Mock).mockImplementation(() => Promise.resolve(mockResponse));
+    await run();
+
+    // Verify HTTP client was created with correct auth
+    expect(HttpClient).toHaveBeenCalledWith('wt-tools-action', expect.arrayContaining([
+      expect.objectContaining({ username: 'test-api-key', password: 'test-api-secret' })
+    ]));
+
+    // Verify environment variables were set
+    expect(mockExportVariable).toHaveBeenCalledWith('DB_PASSWORD', 'secret123');
+    expect(mockExportVariable).toHaveBeenCalledWith('API_TOKEN', 'token456');
+    expect(mockExportVariable).toHaveBeenCalledWith('CONFIG', '{"key":"value"}');
+
+    // Verify success message
+    expect(mockInfo).toHaveBeenCalledWith('Successfully loaded secrets into environment variables');
   });
 
-  describe('getInputs', () => {
-    it('should get all required inputs', async () => {
-      const inputs = await getInputs();
-
-      expect(inputs).toEqual({
-        apiUrl: 'https://test-api.com',
-        project: 'test-project',
-        environment: 'test',
-        envPrefix: 'PREFIX_',
-        outputsPrefix: 'OUT_',
-        upperCaseEnvKeys: true
-      });
+  it('should handle environment variable prefix', async () => {
+    // Override specific input values while keeping defaults for others
+    mockGetInput.mockImplementation((name: string) => {
+      if (name === 'env_prefix') return 'PREFIX_';
+      return getDefaultInputValue(name);
     });
 
-    it('should use default values for optional inputs', async () => {
-      (core.getInput as jest.Mock).mockImplementation((name: string): string => {
-        const inputs: Record<string, string> = {
-          'api_url': 'https://test-api.com',
-          'project': 'test-project',
-          'environment': 'test'
-        };
-        return inputs[name] || '';
-      });
+    const mockSecrets = { SECRET: 'value' };
+    mockGetJson.mockResolvedValueOnce({ result: mockSecrets });
 
-      const inputs = await getInputs();
+    await run();
 
-      expect(inputs).toEqual({
-        apiUrl: 'https://test-api.com',
-        project: 'test-project',
-        environment: 'test',
-        envPrefix: '',
-        outputsPrefix: '',
-        upperCaseEnvKeys: false
-      });
-    });
-
-    it('should throw error when required inputs are missing', async () => {
-      (core.getInput as jest.Mock).mockImplementation(() => '');
-      await expect(getInputs()).rejects.toThrow();
-    });
+    expect(mockExportVariable).toHaveBeenCalledWith('PREFIX_SECRET', 'value');
   });
 
-  describe('fetchConfig', () => {
-    it('should fetch and parse JSON config', async () => {
-      const inputs = {
-        apiUrl: 'https://test-api.com',
-        project: 'test-project',
-        environment: 'test',
-        envPrefix: '',
-        outputsPrefix: '',
-        upperCaseEnvKeys: false
-      };
-
-      const config = await fetchConfig(inputs);
-
-      expect(config).toEqual({
-        database_url: 'postgresql://test',
-        api_key: 'test-key',
-        nested_config: { key: 'value' }
-      });
-
-      expect(http.HttpClient.prototype.get).toHaveBeenCalled();
+  it('should handle uppercase environment variable keys', async () => {
+    mockGetInput.mockImplementation((name: string) => {
+      if (name === 'upper_case_env_keys') return 'true';
+      return getDefaultInputValue(name);
     });
 
-    it('should handle HTTP errors', async () => {
-      (http.HttpClient.prototype.get as jest.Mock).mockImplementation(() => Promise.resolve({
-        message: {
-          statusCode: 404
-        }
-      } as MockResponse));
+    const mockSecrets = { secret_key: 'value' };
+    mockGetJson.mockResolvedValueOnce({ result: mockSecrets });
 
-      const inputs = {
-        apiUrl: 'https://test-api.com',
-        project: 'test-project',
-        environment: 'test',
-        envPrefix: '',
-        outputsPrefix: '',
-        upperCaseEnvKeys: false
-      };
+    await run();
 
-      await expect(fetchConfig(inputs)).rejects.toThrow('HTTP error! status: 404');
-    });
-
-    it('should handle malformed JSON response', async () => {
-      (http.HttpClient.prototype.get as jest.Mock).mockImplementation(() => Promise.resolve({
-        message: { statusCode: 200 },
-        readBody: async () => 'invalid json'
-      } as MockResponse));
-
-      const inputs = {
-        apiUrl: 'https://test-api.com',
-        project: 'test-project',
-        environment: 'test',
-        envPrefix: '',
-        outputsPrefix: '',
-        upperCaseEnvKeys: false
-      };
-
-      await expect(fetchConfig(inputs)).rejects.toThrow(SyntaxError);
-    });
+    expect(mockExportVariable).toHaveBeenCalledWith('SECRET_KEY', 'value');
   });
 
-  describe('setEnvironmentVariables', () => {
-    it('should set environment variables and outputs with prefixes', async () => {
-      const inputs = {
-        apiUrl: 'https://test-api.com',
-        project: 'test-project',
-        environment: 'test',
-        envPrefix: 'PREFIX_',
-        outputsPrefix: 'OUT_',
-        upperCaseEnvKeys: true
-      };
-
-      const data = {
-        database_url: 'postgresql://test',
-        api_key: 'test-key',
-        nested_config: { key: 'value' }
-      };
-
-      await setEnvironmentVariables(inputs, data);
-
-      expect(core.exportVariable).toHaveBeenCalledWith(
-        'DATABASE_URL',
-        'postgresql://test'
-      );
-      expect(core.exportVariable).toHaveBeenCalledWith(
-        'API_KEY',
-        'test-key'
-      );
-      expect(core.exportVariable).toHaveBeenCalledWith(
-        'NESTED_CONFIG',
-        JSON.stringify({ key: 'value' })
-      );
-
-      expect(core.setOutput).toHaveBeenCalledWith(
-        'OUT_database_url',
-        'postgresql://test'
-      );
+  it('should set outputs with prefix when specified', async () => {
+    mockGetInput.mockImplementation((name: string) => {
+      if (name === 'outputs_prefix') return 'output_';
+      return getDefaultInputValue(name);
     });
 
-    it('should handle non-uppercase keys when flag is false', async () => {
-      const inputs = {
-        apiUrl: 'https://test-api.com',
-        project: 'test-project',
-        environment: 'test',
-        envPrefix: 'prefix_',
-        outputsPrefix: 'out_',
-        upperCaseEnvKeys: false
-      };
+    const mockSecrets = { SECRET: 'value' };
+    mockGetJson.mockResolvedValueOnce({ result: mockSecrets });
 
-      const data = {
-        database_url: 'postgresql://test',
-        API_KEY: 'test-key'
-      };
+    await run();
 
-      await setEnvironmentVariables(inputs, data);
-
-      expect(core.exportVariable).toHaveBeenCalledWith(
-        'prefix_database_url',
-        'postgresql://test'
-      );
-      expect(core.exportVariable).toHaveBeenCalledWith(
-        'prefix_API_KEY',
-        'test-key'
-      );
-    });
-
-    it('should handle special types of values', async () => {
-      const inputs = {
-        apiUrl: 'https://test-api.com',
-        project: 'test-project',
-        environment: 'test',
-        envPrefix: '',
-        outputsPrefix: '',
-        upperCaseEnvKeys: true
-      };
-
-      const data = {
-        number: 123,
-        boolean: true,
-        null_value: null,
-        array: [1, 2, 3],
-        empty_string: ''
-      };
-
-      await setEnvironmentVariables(inputs, data);
-
-      expect(core.exportVariable).toHaveBeenCalledWith('NUMBER', '123');
-      expect(core.exportVariable).toHaveBeenCalledWith('BOOLEAN', 'true');
-      expect(core.exportVariable).toHaveBeenCalledWith('NULL_VALUE', '');
-      expect(core.exportVariable).toHaveBeenCalledWith('ARRAY', '[1,2,3]');
-      expect(core.exportVariable).toHaveBeenCalledWith('EMPTY_STRING', '');
-    });
+    expect(mockSetOutput).toHaveBeenCalledWith('output_SECRET', 'value');
   });
 
-  describe('run', () => {
-    it('should successfully complete the entire workflow', async () => {
-      await run();
+  it('should handle API errors', async () => {
+    const errorMessage = 'API Error';
+    mockGetJson.mockRejectedValueOnce(new Error(errorMessage));
 
-      expect(core.getInput).toHaveBeenCalledWith('api_url', { required: true });
-      expect(core.getInput).toHaveBeenCalledWith('project', { required: true });
-      expect(core.getInput).toHaveBeenCalledWith('environment', { required: true });
+    await run();
 
-      expect(http.HttpClient.prototype.get).toHaveBeenCalled();
-      expect(core.exportVariable).toHaveBeenCalled();
-      expect(core.setOutput).toHaveBeenCalled();
-      expect(core.info).toHaveBeenCalledWith('Successfully set all environment variables');
-      expect(core.setFailed).not.toHaveBeenCalled();
+    expect(mockSetFailed).toHaveBeenCalledWith(`Action failed: ${errorMessage}`);
+  });
+
+  it('should handle empty response', async () => {
+    mockGetJson.mockResolvedValueOnce({ result: null });
+
+    await run();
+
+    expect(mockSetFailed).toHaveBeenCalledWith('Action failed: No secrets found or invalid response');
+  });
+
+  it('should use custom API base URL when provided', async () => {
+    const customBaseUrl = 'https://custom.api.example.com';
+    mockGetInput.mockImplementation((name: string) => {
+      if (name === 'api_base_url') return customBaseUrl;
+      return getDefaultInputValue(name);
     });
 
-    it('should handle errors properly', async () => {
-      (http.HttpClient.prototype.get as jest.Mock).mockImplementation(() => {
-        throw new Error('Network error');
-      });
+    const mockSecrets = { SECRET: 'value' };
+    mockGetJson.mockResolvedValueOnce({ result: mockSecrets });
 
-      await run();
+    await run();
 
-      expect(core.setFailed).toHaveBeenCalledWith('Network error');
-      expect(core.exportVariable).not.toHaveBeenCalled();
-      expect(core.setOutput).not.toHaveBeenCalled();
-    });
+    expect(mockGetJson).toHaveBeenCalledWith(
+      `${customBaseUrl}/v1/secrets/projects/test-project/environment/test-env/json`,
+      expect.any(Object)
+    );
+  });
+
+  it('should handle secrets with different value types', async () => {
+    const mockSecrets = {
+      STRING: 'string-value',
+      NUMBER: 42,
+      BOOLEAN: true,
+      OBJECT: { nested: 'value' },
+      ARRAY: [1, 2, 3],
+      NULL: null
+    };
+    mockGetJson.mockResolvedValueOnce({ result: mockSecrets });
+
+    await run();
+
+    expect(mockExportVariable).toHaveBeenCalledWith('STRING', 'string-value');
+    expect(mockExportVariable).toHaveBeenCalledWith('NUMBER', '42');
+    expect(mockExportVariable).toHaveBeenCalledWith('BOOLEAN', 'true');
+    expect(mockExportVariable).toHaveBeenCalledWith('OBJECT', '{"nested":"value"}');
+    expect(mockExportVariable).toHaveBeenCalledWith('ARRAY', '[1,2,3]');
+    expect(mockExportVariable).toHaveBeenCalledWith('NULL', 'null');
   });
 });

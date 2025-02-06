@@ -1,12 +1,12 @@
 # action.yml
-name: 'wt.dev-load-secrets'
+name: 'wt.tools-load-secrets'
 description: 'Fetches JSON from an HTTP endpoint and sets the keys as environment variables'
 inputs:
-  username: 
-    description: 'Username for wt.dev'
+  apikey: 
+    description: 'wt.tools API key'
     required: true
-  password:
-    description: 'Password for wt.dev'
+  apisecret:
+    description: 'wt.tools API secret'
     required: true
 
   project:
