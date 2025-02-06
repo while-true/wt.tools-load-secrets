@@ -1,4 +1,3 @@
-
 # wt.tools-load-secrets Action
 
 This action fetches secrets from wt.tools and loads them into your GitHub Actions environment variables.
@@ -18,7 +17,7 @@ jobs:
       - uses: actions/checkout@v3
       
       - name: Load Secrets
-        uses: your-org/wt-tools-load-secrets@v1
+        uses: while-true/wt-tools-load-secrets@v1
         with:
           apikey: ${{ secrets.WT_TOOLS_API_KEY }}
           apisecret: ${{ secrets.WT_TOOLS_API_SECRET }}
@@ -30,6 +29,31 @@ jobs:
         run: |
           echo "Using database URL: $DATABASE_URL"
           echo "Using API key: $API_KEY"
+```
+
+### Using Presigned URL
+
+```yaml
+name: Deploy Application
+on: [push]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Load Secrets
+        uses: while-true/wt-tools-load-secrets@v1
+        with:
+          presigned_url: ${{ secrets.WT_TOOLS_PRESIGNED_URL }}
+          env_prefix: 'WT_'  # Optional prefix
+
+      # Use the loaded secrets in subsequent steps
+      - name: Deploy
+        run: |
+          echo "Using database URL: $WT_DATABASE_URL"
+          echo "Using API key: $WT_API_KEY"
 ```
 
 ## Advanced Usage Examples
