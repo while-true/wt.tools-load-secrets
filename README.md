@@ -47,7 +47,7 @@ jobs:
         uses: while-true/wt-tools-load-secrets@v1
         with:
           presigned_url: ${{ secrets.WT_TOOLS_PRESIGNED_URL }}
-          env_prefix: 'WT_'  # Optional prefix
+          output_env_var_prefix: 'WT_'  # Optional prefix
 
       # Use the loaded secrets in subsequent steps
       - name: Deploy
@@ -68,7 +68,7 @@ jobs:
     apisecret: ${{ secrets.WT_TOOLS_API_SECRET }}
     project: 'my-project'
     environment: 'staging'
-    env_prefix: 'WT_'  # Will prefix all variables with WT_
+    output_env_var_prefix: 'WT_'  # Will prefix all variables with WT_
 ```
 
 ### Using Uppercase Keys
@@ -136,7 +136,7 @@ jobs:
           apisecret: ${{ secrets.WT_TOOLS_API_SECRET }}
           project: 'my-project'
           environment: 'production'
-          env_prefix: 'PROD_'
+          output_env_var_prefix: 'PROD_'
           outputs_prefix: 'secret_'
           upper_case_env_keys: true
           api_base_url: 'https://api.wt.tools'
@@ -160,7 +160,7 @@ jobs:
 | `apisecret` | Yes | - | wt.tools API secret |
 | `project` | Yes | - | Project identifier |
 | `environment` | Yes | - | Environment name |
-| `env_prefix` | No | '' | Prefix for environment variables |
+| `output_env_var_prefix` | No | '' | Prefix for environment variables |
 | `outputs_prefix` | No | '' | Prefix for output variables |
 | `upper_case_env_keys` | No | false | Convert keys to uppercase |
 | `api_base_url` | No | 'https://api.wt.tools' | Custom API endpoint |
@@ -169,7 +169,7 @@ jobs:
 
 1. Always store your API key and secret as GitHub Secrets
 2. Use environment-specific secrets when possible
-3. Consider using the env_prefix to avoid variable name conflicts
+3. Consider using the output_env_var_prefix to avoid variable name conflicts
 4. Regularly rotate your API credentials
 
 ## Troubleshooting

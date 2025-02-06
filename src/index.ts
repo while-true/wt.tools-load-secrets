@@ -7,11 +7,24 @@ interface SecretResponse {
   [key: string]: any;
 }
 
+function parsePresignedUrl(url: string): { baseUrl: string; params: URLSearchParams } {
+  const urlObj = new URL(url);
+  return {
+    baseUrl: `${urlObj.origin}${urlObj.pathname}`,
+    params: urlObj.searchParams
+  };
+}
+
+function getFreeQueryParams(params: URLSearchParams): string[] {
+  const freeQueryParamsStr = params.get('free_query_params');
+  return freeQueryParamsStr ? decodeURIComponent(freeQueryParamsStr).split(',') : [];
+}
+
 async function run(): Promise<void> {
   try {
     // Get inputs
     const presignedUrl = core.getInput('presigned_url');
-    const envPrefix = core.getInput('env_prefix') || '';
+    const envPrefix = core.getInput('output_env_var_prefix') || '';
     const outputsPrefix = core.getInput('outputs_prefix') || '';
     const upperCaseEnvKeys = core.getInput('upper_case_env_keys') === 'true';
 
@@ -19,9 +32,41 @@ async function run(): Promise<void> {
     let url: string;
 
     if (presignedUrl) {
-      // For presigned URL, create client without auth
+      // Parse presigned URL and handle free query parameters
+      const { baseUrl, params } = parsePresignedUrl(presignedUrl);
+      const freeQueryParams = getFreeQueryParams(params);
+      
+      // Create new URL with existing parameters
+      const finalUrl = new URL(baseUrl);
+      params.forEach((value, key) => {
+        finalUrl.searchParams.append(key, value);
+      });
+
+      // Validate and collect all required parameters first
+      let requiredParams = new Map<string, string>();
+      
+      // Handle env parameter specially
+      if (freeQueryParams.includes('env')) {
+        const env = core.getInput('environment', { required: true });
+        requiredParams.set('env', env);
+      }
+
+      // Handle other free query params
+      for (const param of freeQueryParams) {
+        if (param !== 'env') {
+          const value = core.getInput(param, { required: true });
+          requiredParams.set(param, value);
+        }
+      }
+
+      // Add all parameters to URL
+      requiredParams.forEach((value, key) => {
+        finalUrl.searchParams.append(key, value);
+      });
+
+      // Create client without auth
       http = new HttpClient('wt-tools-action');
-      url = presignedUrl;
+      url = finalUrl.toString();
     } else {
       // Traditional auth method
       const apiKey = core.getInput('apikey', { required: true });

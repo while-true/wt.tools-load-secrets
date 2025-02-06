@@ -25671,7 +25671,7 @@ async function run() {
     try {
         // Get inputs
         const presignedUrl = core.getInput('presigned_url');
-        const envPrefix = core.getInput('env_prefix') || '';
+        const envPrefix = core.getInput('output_env_var_prefix') || '';
         const outputsPrefix = core.getInput('outputs_prefix') || '';
         const upperCaseEnvKeys = core.getInput('upper_case_env_keys') === 'true';
         let http;

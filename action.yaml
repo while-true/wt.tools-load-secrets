@@ -14,9 +14,9 @@ inputs:
     description: 'Project identifier (not required if using presigned_url)'
     required: false
   environment:
-    description: 'Environment name (not required if using presigned_url)'
+    description: 'Environment name (not required if using non-wildcard environment presigned_url )'
     required: false
-  env_prefix:
+  output_env_var_prefix:
     description: 'Prefix for environment variables to prevent clashes'
     required: false
     default: ''

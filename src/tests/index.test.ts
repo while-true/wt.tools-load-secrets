@@ -30,7 +30,7 @@ describe('wt-tools-load-secrets action', () => {
         return 'test-project';
       case 'environment':
         return 'test-env';
-      case 'env_prefix':
+      case 'output_env_var_prefix':
         return '';
       case 'outputs_prefix':
         return '';
@@ -84,7 +84,7 @@ describe('wt-tools-load-secrets action', () => {
       switch (name) {
         case 'presigned_url':
           return presignedUrl;
-        case 'env_prefix':
+        case 'output_env_var_prefix':
           return 'PREFIX_';
         case 'upper_case_env_keys':
           return 'true';
@@ -130,7 +130,7 @@ describe('wt-tools-load-secrets action', () => {
   it('should handle environment variable prefix', async () => {
     // Override specific input values while keeping defaults for others
     mockGetInput.mockImplementation((name: string) => {
-      if (name === 'env_prefix') return 'PREFIX_';
+      if (name === 'output_env_var_prefix') return 'PREFIX_';
       return getDefaultInputValue(name);
     });
 
@@ -224,5 +224,85 @@ describe('wt-tools-load-secrets action', () => {
     expect(mockExportVariable).toHaveBeenCalledWith('OBJECT', '{"nested":"value"}');
     expect(mockExportVariable).toHaveBeenCalledWith('ARRAY', '[1,2,3]');
     expect(mockExportVariable).toHaveBeenCalledWith('NULL', 'null');
+  });
+
+  
+
+  it('should handle presigned URL with free query parameters', async () => {
+    const presignedUrl = 'https://api.test.wt.tools/v1/secrets/teams/test/projects/test/items/example/json?api_key=test_key&free_query_params=key%2Cenv&signature=test_signature';
+    mockGetInput.mockImplementation((name: string) => {
+      switch (name) {
+        case 'presigned_url':
+          return presignedUrl;
+        case 'environment':
+          return 'prod';
+        case 'key':
+          return 'testkey';
+        default:
+          return getDefaultInputValue(name);
+      }
+    });
+
+    const mockSecrets = { SECRET: 'value' };
+    mockGetJson.mockResolvedValueOnce({ result: mockSecrets });
+
+    await run();
+
+    // Verify HTTP client was created without auth
+    expect(HttpClient).toHaveBeenCalledWith('wt-tools-action');
+    
+    // Verify the correct URL was constructed with all parameters
+    expect(mockGetJson).toHaveBeenCalledWith(
+      expect.stringContaining('api_key=test_key'),
+      expect.any(Object)
+    );
+    expect(mockGetJson.mock.calls[0][0]).toEqual(
+      expect.stringContaining('env=prod')
+    );
+    expect(mockGetJson.mock.calls[0][0]).toEqual(
+      expect.stringContaining('key=testkey')
+    );
+
+    // Verify secrets were set
+    expect(mockExportVariable).toHaveBeenCalledWith('SECRET', 'value');
+  });
+
+  it('should require environment input when env is in free_query_params', async () => {
+    const presignedUrl = 'https://api.test.wt.tools/v1/secrets/test/json?api_key=test_key&free_query_params=env&signature=test_signature';
+    mockGetInput.mockImplementation((name: string) => {
+      if (name === 'presigned_url') return presignedUrl;
+      if (name === 'environment') {
+        throw new Error('Input required and not supplied: environment');
+      }
+      return getDefaultInputValue(name);
+    });
+
+    await run();
+
+    // Verify that the action failed due to missing required input
+    expect(mockSetFailed).toHaveBeenCalledWith(
+      expect.stringContaining('Input required and not supplied: environment')
+    );
+  });
+
+  // Include all previous tests...
+  it('should handle presigned URL', async () => {
+    const presignedUrl = 'https://api.wt.tools/v1/secrets/presigned/abc123';
+    mockGetInput.mockImplementation((name: string) => {
+      if (name === 'presigned_url') return presignedUrl;
+      return getDefaultInputValue(name);
+    });
+
+    const mockSecrets = { SECRET: 'value' };
+    mockGetJson.mockResolvedValueOnce({ result: mockSecrets });
+
+    await run();
+
+    expect(HttpClient).toHaveBeenCalledWith('wt-tools-action');
+    expect(mockGetJson).toHaveBeenCalledWith(
+      presignedUrl,
+      expect.any(Object)
+    );
+    expect(mockExportVariable).toHaveBeenCalledWith('SECRET', 'value');
   });
 });
