@@ -21,6 +21,9 @@ function getFreeQueryParams(params: URLSearchParams): string[] {
 }
 
 async function run(): Promise<void> {
+
+  const isDebug = (process.env.ACTIONS_STEP_DEBUG === 'true');
+    
   try {
     // Get inputs
     const presignedUrl = core.getInput('presigned_url');
@@ -32,6 +35,7 @@ async function run(): Promise<void> {
     let url: string;
 
     if (presignedUrl) {
+      if (isDebug) console.debug(`presigned url ${presignedUrl}`);
       // Parse presigned URL and handle free query parameters
       const { baseUrl, params } = parsePresignedUrl(presignedUrl);
       const freeQueryParams = getFreeQueryParams(params);
@@ -47,6 +51,7 @@ async function run(): Promise<void> {
       
       // Handle env parameter specially
       if (freeQueryParams.includes('env')) {
+        if (isDebug) console.debug(`presigned url with wildcard env detected`);
         const env = core.getInput('environment', { required: true });
         requiredParams.set('env', env);
       }
@@ -60,6 +65,7 @@ async function run(): Promise<void> {
       // Create client without auth
       http = new HttpClient('wt-tools-action');
       url = finalUrl.toString();
+      if (isDebug) console.debug(`Request presigned url ${url}`);
     } else {
       // Traditional auth method
       const apiKey = core.getInput('apikey', { required: true });
@@ -75,6 +81,7 @@ async function run(): Promise<void> {
 
       // Construct URL for traditional method
       url = `${apiBaseUrl}/v1/secrets/projects/${project}/environment/${environment}/json`;
+      if (isDebug) console.info(`build url ${url} with basic auth for api key ${apiKey}`);
     }
 
     // Get project secrets
@@ -82,6 +89,7 @@ async function run(): Promise<void> {
       'Accept': 'application/json'
     });
 
+    if (isDebug) console.debug(`received response ${JSON.stringify(response.result)}`);
     if (!response.result) {
       throw new Error('No secrets found or invalid response');
     }
@@ -101,11 +109,13 @@ async function run(): Promise<void> {
         : String(value);
 
       // Set environment variable
+      if (isDebug) console.debug(`exporing variable ${envKey}=${envValue}`)
       core.exportVariable(envKey, envValue);
 
       // Set output if outputs_prefix is specified
       if (outputsPrefix) {
         const outputKey = `${outputsPrefix}${key}`;
+        if (isDebug) console.debug(`setting output ${outputKey}=${envValue}`)
         core.setOutput(outputKey, envValue);
       }
     });
@@ -113,15 +123,16 @@ async function run(): Promise<void> {
     core.info('Successfully loaded secrets into environment variables');
 
   } catch (error) {
+    if (isDebug) {
+      console.error('Error details:', error);
+    }
     if (error instanceof Error) {
-      core.setFailed(`Action failed: ${JSON.stringify(error?.message ?? error)}`);
+      core.setFailed(`Action failed: ${error.message}`);
     } else {
       core.setFailed('An unexpected error occurred');
     }
     // Additional debug logging
-    if (process.env.ACTIONS_STEP_DEBUG === 'true') {
-      console.error('Error details:', error);
-    }
+    
   }
 }
 

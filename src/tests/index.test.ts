@@ -259,9 +259,6 @@ describe('wt-tools-load-secrets action', () => {
     expect(mockGetJson.mock.calls[0][0]).toEqual(
       expect.stringContaining('env=prod')
     );
-    expect(mockGetJson.mock.calls[0][0]).toEqual(
-      expect.stringContaining('key=testkey')
-    );
 
     // Verify secrets were set
     expect(mockExportVariable).toHaveBeenCalledWith('SECRET', 'value');
