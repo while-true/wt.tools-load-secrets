@@ -51,13 +51,6 @@ async function run(): Promise<void> {
         requiredParams.set('env', env);
       }
 
-      // Handle other free query params
-      for (const param of freeQueryParams) {
-        if (param !== 'env') {
-          const value = core.getInput(param, { required: true });
-          requiredParams.set(param, value);
-        }
-      }
 
       // Add all parameters to URL
       requiredParams.forEach((value, key) => {
@@ -121,7 +114,7 @@ async function run(): Promise<void> {
 
   } catch (error) {
     if (error instanceof Error) {
-      core.setFailed(`Action failed: ${error.message}`);
+      core.setFailed(`Action failed: ${JSON.stringify(error?.message ?? error)}`);
     } else {
       core.setFailed('An unexpected error occurred');
     }
